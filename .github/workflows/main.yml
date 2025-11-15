@@ -1,4 +1,4 @@
-name: Build and Release binaries (Linux & Android)
+name: Build and Release binaries (Linux x86 & ARM)
 
 on:
   push:
@@ -13,13 +13,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: [amd64, arm64]
+        arch: [amd64, arm64, armhf, armv7]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y build-essential git curl libssl-dev zlib1g-dev
+        run: sudo apt-get update && sudo apt-get install -y build-essential git curl libssl-dev zlib1g-dev gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf
 
       - name: Build for amd64
         if: matrix.arch == 'amd64'
@@ -27,35 +27,18 @@ jobs:
 
       - name: Build for arm64
         if: matrix.arch == 'arm64'
-        run: make ARCH="-march=armv8-a"
+        run: make CC=aarch64-linux-gnu-gcc ARCH="-march=armv8-a"
+
+      - name: Build for armhf
+        if: matrix.arch == 'armhf'
+        run: make CC=arm-linux-gnueabihf-gcc ARCH="-march=armv7-a"
+
+      - name: Build for armv7
+        if: matrix.arch == 'armv7'
+        run: make CC=arm-linux-gnueabihf-gcc ARCH="-march=armv7-a"
 
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
           name: mtproto-proxy-Linux-${{ matrix.arch }}
-          path: objs/bin/mtproto-proxy
-
-  build-android:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Android NDK (r26d)
-        uses: nttld/setup-ndk@v1
-        with:
-          ndk-version: r26d
-
-      - name: Set ANDROID NDK variables
-        run: |
-          echo "export PATH=${ANDROID_NDK}/toolchains/llvm/prebuilt/linux-x86_64/bin:\$PATH" >> $GITHUB_ENV
-          echo "export CC=aarch64-linux-android33-clang" >> $GITHUB_ENV
-
-      - name: Build for Android arm64
-        run: make CC=aarch64-linux-android33-clang ARCH="-march=armv8-a"
-
-      - name: Upload Android binary
-        uses: actions/upload-artifact@v4
-        with:
-          name: mtproto-proxy-android-arm64
           path: objs/bin/mtproto-proxy
