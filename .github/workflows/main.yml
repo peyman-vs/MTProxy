@@ -1,4 +1,4 @@
-name: Build and Release binaries (multi arch)
+name: Build and Release binaries (Linux & Android)
 
 on:
   push:
@@ -8,38 +8,54 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
-    runs-on: ${{ matrix.os }}
+  build-linux:
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
         arch: [amd64, arm64]
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install dependencies (Ubuntu)
-        if: runner.os == 'Linux'
+      - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y build-essential git curl libssl-dev zlib1g-dev
 
-      - name: Install dependencies (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          brew update
-          brew install openssl zlib make
-
-      - name: Build for AMD64
+      - name: Build for amd64
         if: matrix.arch == 'amd64'
         run: make m=64
 
-      - name: Build for ARM64
+      - name: Build for arm64
         if: matrix.arch == 'arm64'
-        run: make ARCH="-march=armv8-a"  # یا اگر Makefile فقط m=64/m=32 می‌پذیرد، شاید لازم باشد تغییرش دهی!
+        run: make ARCH="-march=armv8-a"
 
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
-          name: mtproto-proxy-${{ runner.os }}-${{ matrix.arch }}
+          name: mtproto-proxy-Linux-${{ matrix.arch }}
+          path: objs/bin/mtproto-proxy
+
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Android NDK (r26d)
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r26d
+
+      - name: Set ANDROID NDK variables
+        run: |
+          echo "export PATH=${ANDROID_NDK}/toolchains/llvm/prebuilt/linux-x86_64/bin:\$PATH" >> $GITHUB_ENV
+          echo "export CC=aarch64-linux-android33-clang" >> $GITHUB_ENV
+
+      - name: Build for Android arm64
+        run: make CC=aarch64-linux-android33-clang ARCH="-march=armv8-a"
+
+      - name: Upload Android binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: mtproto-proxy-android-arm64
           path: objs/bin/mtproto-proxy
