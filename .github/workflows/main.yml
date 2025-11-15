@@ -1,4 +1,4 @@
-name: Build and Release binaries
+name: Build and Release binaries (multi arch)
 
 on:
   push:
@@ -14,6 +14,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
+        arch: [amd64, arm64]
 
     steps:
       - name: Checkout code
@@ -29,11 +30,16 @@ jobs:
           brew update
           brew install openssl zlib make
 
-      - name: Build
-        run: make
+      - name: Build for AMD64
+        if: matrix.arch == 'amd64'
+        run: make m=64
+
+      - name: Build for ARM64
+        if: matrix.arch == 'arm64'
+        run: make ARCH="-march=armv8-a"  # یا اگر Makefile فقط m=64/m=32 می‌پذیرد، شاید لازم باشد تغییرش دهی!
 
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
-          name: mtproto-proxy-${{ runner.os }}
+          name: mtproto-proxy-${{ runner.os }}-${{ matrix.arch }}
           path: objs/bin/mtproto-proxy
