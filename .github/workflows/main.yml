@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest]
 
     steps:
       - name: Checkout code
@@ -29,25 +29,11 @@ jobs:
           brew update
           brew install openssl zlib make
 
-      - name: Install dependencies (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          choco install make
-          # Windows build may fail due to missing openssl/zlib
-
       - name: Build
         run: make
 
-      - name: Upload binary (Linux/macOS)
-        if: runner.os != 'Windows'
+      - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
           name: mtproto-proxy-${{ runner.os }}
           path: objs/bin/mtproto-proxy
-
-      - name: Upload binary (Windows)
-        if: runner.os == 'Windows'
-        uses: actions/upload-artifact@v4
-        with:
-          name: mtproto-proxy-${{ runner.os }}
-          path: objs/bin/mtproto-proxy.exe
