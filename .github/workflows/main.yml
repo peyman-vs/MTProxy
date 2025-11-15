@@ -1,0 +1,38 @@
+name: Build and Release binaries
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup build dependencies (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential
+
+      - name: Setup build dependencies (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          choco install make
+
+      - name: Build project
+        run: make release
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mtproxy-${{ runner.os }}
+          path: ./bin/*   # فرض بر این که فایل باینری در bin ساخته می‌شود
