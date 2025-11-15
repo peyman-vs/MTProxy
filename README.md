@@ -1,109 +1,106 @@
-# MTProxy
-Simple MT-Proto proxy
+# تعیین CC به صورت پیش‌فرض (gcc)، اگر override نشود
+CC ?= gcc
+OBJ	=	objs
+DEP	=	dep
+EXE = ${OBJ}/bin
 
-## Building
-Install dependencies, you would need common set of tools for building from source, and development packages for `openssl` and `zlib`.
+COMMIT := $(shell git log -1 --pretty=format:"%H")
 
-On Debian/Ubuntu:
-```bash
-apt install git curl build-essential libssl-dev zlib1g-dev
-```
-On CentOS/RHEL:
-```bash
-yum install openssl-devel zlib-devel
-yum groupinstall "Development Tools"
-```
+ARCHFLAG =
+CPUFLAGS =
+ifeq ($(m),32)
+ARCHFLAG = -m32
+CPUFLAGS = -march=core2 -mfpmath=sse -mssse3
+endif
+ifeq ($(m),64)
+ARCHFLAG = -m64
+CPUFLAGS = -march=core2 -mfpmath=sse -mssse3
+endif
 
-Clone the repo:
-```bash
-git clone https://github.com/TelegramMessenger/MTProxy
-cd MTProxy
-```
+# اگر CC حاوی "aarch64" باشد، فلگ‌های ARM ست شود
+ifneq (,$(findstring aarch64,$(CC)))
+CPUFLAGS = -march=armv8-a
+endif
+# اگر CC حاوی "arm" باشد و aarch64 نباشد، armv7-a فرض شود
+ifneq (,$(findstring arm,$(CC)))
+ifneq (,$(findstring gnueabihf,$(CC)))
+CPUFLAGS = -march=armv7-a
+endif
+endif
 
-To build, simply run `make`, the binary will be in `objs/bin/mtproto-proxy`:
+CFLAGS = $(ARCHFLAG) -O3 -std=gnu11 -Wall -Wno-array-bounds -mpclmul $(CPUFLAGS) -fno-strict-aliasing -fno-strict-overflow -fwrapv -DAES=1 -DCOMMIT=\"${COMMIT}\" -D_GNU_SOURCE=1 -D_FILE_OFFSET_BITS=64
+LDFLAGS = $(ARCHFLAG) -ggdb -rdynamic -lm -lrt -lcrypto -lz -lpthread -lcrypto
 
-```bash
-make && cd objs/bin
-```
+LIB = ${OBJ}/lib
+CINCLUDE = -iquote common -iquote .
 
-If the build has failed, you should run `make clean` before building it again.
+LIBLIST = ${LIB}/libkdb.a
 
-## Running
-1. Obtain a secret, used to connect to telegram servers.
-```bash
-curl -s https://core.telegram.org/getProxySecret -o proxy-secret
-```
-2. Obtain current telegram configuration. It can change (occasionally), so we encourage you to update it once per day.
-```bash
-curl -s https://core.telegram.org/getProxyConfig -o proxy-multi.conf
-```
-3. Generate a secret to be used by users to connect to your proxy.
-```bash
-head -c 16 /dev/urandom | xxd -ps
-```
-4. Run `mtproto-proxy`:
-```bash
-./mtproto-proxy -u nobody -p 8888 -H 443 -S <secret> --aes-pwd proxy-secret proxy-multi.conf -M 1
-```
-... where:
-- `nobody` is the username. `mtproto-proxy` calls `setuid()` to drop privileges.
-- `443` is the port, used by clients to connect to the proxy.
-- `8888` is the local port. You can use it to get statistics from `mtproto-proxy`. Like `wget localhost:8888/stats`. You can only get this stat via loopback.
-- `<secret>` is the secret generated at step 3. Also you can set multiple secrets: `-S <secret1> -S <secret2>`.
-- `proxy-secret` and `proxy-multi.conf` are obtained at steps 1 and 2.
-- `1` is the number of workers. You can increase the number of workers, if you have a powerful server.
+PROJECTS = common jobs mtproto net crypto engine
 
-Also feel free to check out other options using `mtproto-proxy --help`.
+OBJDIRS := ${OBJ} $(addprefix ${OBJ}/,${PROJECTS}) ${EXE} ${LIB}
+DEPDIRS := ${DEP} $(addprefix ${DEP}/,${PROJECTS})
+ALLDIRS := ${DEPDIRS} ${OBJDIRS}
 
-5. Generate the link with following schema: `tg://proxy?server=SERVER_NAME&port=PORT&secret=SECRET` (or let the official bot generate it for you).
-6. Register your proxy with [@MTProxybot](https://t.me/MTProxybot) on Telegram.
-7. Set received tag with arguments: `-P <proxy tag>`
-8. Enjoy.
+.PHONY:	all clean 
 
-## Random padding
-Due to some ISPs detecting MTProxy by packet sizes, random padding is
-added to packets if such mode is enabled.
+EXELIST	:= ${EXE}/mtproto-proxy
 
-It's only enabled for clients which request it.
+OBJECTS	=	\
+  ${OBJ}/mtproto/mtproto-proxy.o ${OBJ}/mtproto/mtproto-config.o ${OBJ}/net/net-tcp-rpc-ext-server.o
 
-Add `dd` prefix to secret (`cafe...babe` => `ddcafe...babe`) to enable
-this mode on client side.
+LIB_OBJS_NORMAL := \
+	${OBJ}/common/crc32c.o \
+	${OBJ}/common/pid.o \
+	${OBJ}/common/sha1.o \
+	${OBJ}/common/sha256.o \
+	${OBJ}/common/md5.o \
+	${OBJ}/common/resolver.o \
+	${OBJ}/common/parse-config.o \
+	${OBJ}/crypto/aesni256.o \
+	${OBJ}/jobs/jobs.o ${OBJ}/common/mp-queue.o \
+	${OBJ}/net/net-events.o ${OBJ}/net/net-msg.o ${OBJ}/net/net-msg-buffers.o \
+	${OBJ}/net/net-config.o ${OBJ}/net/net-crypto-aes.o ${OBJ}/net/net-crypto-dh.o ${OBJ}/net/net-timers.o \
+	${OBJ}/net/net-connections.o \
+	${OBJ}/net/net-rpc-targets.o \
+	${OBJ}/net/net-tcp-connections.o ${OBJ}/net/net-tcp-rpc-common.o ${OBJ}/net/net-tcp-rpc-client.o ${OBJ}/net/net-tcp-rpc-server.o \
+	${OBJ}/net/net-http-server.o \
+	${OBJ}/common/tl-parse.o ${OBJ}/common/common-stats.o \
+	${OBJ}/engine/engine.o ${OBJ}/engine/engine-signals.o \
+	${OBJ}/engine/engine-net.o \
+	${OBJ}/engine/engine-rpc.o \
+	${OBJ}/engine/engine-rpc-common.o \
+	${OBJ}/net/net-thread.o ${OBJ}/net/net-stats.o ${OBJ}/common/proc-stat.o \
+	${OBJ}/common/kprintf.o \
+	${OBJ}/common/precise-time.o ${OBJ}/common/cpuid.o \
+	${OBJ}/common/server-functions.o ${OBJ}/common/crc32.o \
 
-## Systemd example configuration
-1. Create systemd service file (it's standard path for the most Linux distros, but you should check it before):
-```bash
-nano /etc/systemd/system/MTProxy.service
-```
-2. Edit this basic service (especially paths and params):
-```bash
-[Unit]
-Description=MTProxy
-After=network.target
+LIB_OBJS := ${LIB_OBJS_NORMAL}
 
-[Service]
-Type=simple
-WorkingDirectory=/opt/MTProxy
-ExecStart=/opt/MTProxy/mtproto-proxy -u nobody -p 8888 -H 443 -S <secret> -P <proxy tag> <other params>
-Restart=on-failure
+OBJECTS_ALL		:=	${OBJECTS} ${LIB_OBJS}
 
-[Install]
-WantedBy=multi-user.target
-```
-3. Reload daemons:
-```bash
-systemctl daemon-reload
-```
-4. Test fresh MTProxy service:
-```bash
-systemctl restart MTProxy.service
-# Check status, it should be active
-systemctl status MTProxy.service
-```
-5. Enable it, to autostart service after reboot:
-```bash
-systemctl enable MTProxy.service
-```
+all:	${ALLDIRS} ${EXELIST} 
+dirs: ${ALLDIRS}
+create_dirs_and_headers: ${ALLDIRS} 
 
-## Docker image
-Telegram is also providing [official Docker image](https://hub.docker.com/r/telegrammessenger/proxy/).
-Note: the image is outdated.
+${ALLDIRS}:	
+	@test -d $@ || mkdir -p $@
+
+${OBJECTS}: ${OBJ}/%.o: %.c | create_dirs_and_headers
+	${CC} ${CFLAGS} ${CINCLUDE} -c -MP -MD -MF ${DEP}/$*.d -MQ ${OBJ}/$*.o -o $@ $<
+
+${LIB_OBJS_NORMAL}: ${OBJ}/%.o: %.c | create_dirs_and_headers
+	${CC} ${CFLAGS} -fpic ${CINCLUDE} -c -MP -MD -MF ${DEP}/$*.d -MQ ${OBJ}/$*.o -o $@ $<
+
+${EXELIST}: ${LIBLIST}
+
+${EXE}/mtproto-proxy:	${OBJ}/mtproto/mtproto-proxy.o ${OBJ}/mtproto/mtproto-config.o ${OBJ}/net/net-tcp-rpc-ext-server.o
+	${CC} -o $@ $^ ${LIB}/libkdb.a ${LDFLAGS}
+
+${LIB}/libkdb.a: ${LIB_OBJS}
+	rm -f $@ && ar rcs $@ $^
+
+clean:
+	rm -rf ${OBJ} ${DEP} ${EXE} || true
+
+force-clean: clean
