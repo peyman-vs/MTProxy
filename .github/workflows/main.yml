@@ -1,15 +1,17 @@
 name: Build and Release binaries
 
 on:
+  workflow_dispatch:
   push:
     branches:
+      - master
       - main
-  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
 
@@ -17,16 +19,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup build dependencies (Linux/macOS)
-        if: runner.os != 'Windows'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y build-essential
 
-      - name: Setup build dependencies (Windows)
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install make gcc
+
+      - name: Install dependencies (Windows)
         if: runner.os == 'Windows'
-        run: |
-          choco install make
+        run: choco install make
 
       - name: Build project
         run: make release
@@ -35,4 +38,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: mtproxy-${{ runner.os }}
-          path: ./bin/*   # فرض بر این که فایل باینری در bin ساخته می‌شود
+          path: ./bin/*
